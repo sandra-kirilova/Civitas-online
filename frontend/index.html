@@ -1,1 +1,761 @@
+<!DOCTYPE html>
+<html lang="lv">
+<head>
+  <meta charset="UTF-8" />
+  <title>Civitas Online</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Socket.IO klienta bibliotēka -->
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"
+          integrity="sha384-7+K0qgS4gVw+/K3Z9syG1rVqIe4rTx9BOiGmSRts3GnGncE03CUu2G2f+X9G7K6P"
+          crossorigin="anonymous"></script>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #111827;
+      color: #e5e7eb;
+    }
+
+    h1, h2, h3 {
+      margin: 0 0 .5rem 0;
+    }
+
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .card {
+      background: #111827;
+      border: 1px solid #374151;
+      border-radius: .75rem;
+      padding: 1rem;
+      box-shadow: 0 4px 10px rgba(0,0,0,.4);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: .5rem;
+      gap: .5rem;
+    }
+
+    .card-header h2 {
+      font-size: 1.1rem;
+    }
+
+    .row {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    label {
+      font-size: .9rem;
+      color: #9ca3af;
+      display: block;
+      margin-bottom: .25rem;
+    }
+
+    input, select {
+      padding: .35rem .5rem;
+      border-radius: .5rem;
+      border: 1px solid #4b5563;
+      background: #020617;
+      color: #e5e7eb;
+      font-size: .9rem;
+      min-width: 0;
+    }
+
+    input:focus, select:focus {
+      outline: 2px solid #6366f1;
+      outline-offset: 1px;
+    }
+
+    button {
+      border: none;
+      border-radius: .5rem;
+      padding: .35rem .7rem;
+      font-size: .9rem;
+      cursor: pointer;
+      background: #4f46e5;
+      color: #e5e7eb;
+      transition: background .15s ease, transform .05s ease;
+      white-space: nowrap;
+    }
+
+    button.secondary {
+      background: #374151;
+    }
+
+    button:disabled {
+      opacity: .5;
+      cursor: default;
+    }
+
+    button:hover:not(:disabled) {
+      background: #6366f1;
+      transform: translateY(-1px);
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: .25rem;
+      min-width: 140px;
+    }
+
+    .players-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .75rem;
+    }
+
+    .player-pill {
+      border-radius: 999px;
+      border: 1px solid #4b5563;
+      padding: .25rem .6rem;
+      font-size: .8rem;
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      background: #020617;
+    }
+
+    .player-pill.me {
+      border-color: #10b981;
+    }
+
+    .player-pill .dot {
+      width: .5rem;
+      height: .5rem;
+      border-radius: 999px;
+      background: #6b7280;
+    }
+
+    .player-pill.me .dot {
+      background: #22c55e;
+    }
+
+    .badge {
+      border-radius: .5rem;
+      padding: .1rem .4rem;
+      font-size: .7rem;
+      background: #111827;
+      border: 1px solid #4b5563;
+    }
+
+    .layout-main {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr);
+      gap: 1rem;
+    }
+
+    @media (max-width: 900px) {
+      .layout-main {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    /* Mana roka */
+    .hand {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+      margin-top: .5rem;
+    }
+
+    .card-slot {
+      width: 90px;
+      height: 130px;
+      border-radius: .75rem;
+      border: 1px solid #4b5563;
+      overflow: hidden;
+      position: relative;
+      background: radial-gradient(circle at 30% 20%, #1f2937, #020617);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform .08s ease, box-shadow .08s ease, border-color .1s ease;
+    }
+
+    .card-slot img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .card-slot span {
+      font-size: .75rem;
+      text-align: center;
+      padding: .25rem;
+    }
+
+    .card-slot.selected {
+      border-color: #f59e0b;
+      box-shadow: 0 0 0 2px rgba(245,158,11,.5);
+      transform: translateY(-2px) scale(1.02);
+    }
+
+    .card-type-tag {
+      position: absolute;
+      bottom: 4px;
+      left: 4px;
+      padding: .1rem .3rem;
+      font-size: .65rem;
+      border-radius: .5rem;
+      background: rgba(15,23,42,.8);
+      border: 1px solid rgba(148,163,184,.7);
+    }
+
+    /* Citu spēlētāju rokas */
+    .others-container {
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+      margin-top: .5rem;
+    }
+
+    .other-player-row {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      flex-wrap: wrap;
+    }
+
+    .other-player-name {
+      font-size: .85rem;
+      color: #e5e7eb;
+      min-width: 120px;
+    }
+
+    .backs-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .25rem;
+    }
+
+    .card-back {
+      width: 50px;
+      height: 70px;
+      border-radius: .5rem;
+      border: 1px solid #4b5563;
+      background: radial-gradient(circle at 30% 20%, #f97316, #7c2d12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .7rem;
+      color: #fef3c7;
+      font-weight: 600;
+    }
+
+    /* Resursi un celtnes */
+    .resource-row {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      flex-wrap: wrap;
+      margin-top: .3rem;
+    }
+
+    .resource-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: .25rem;
+      font-size: .8rem;
+      padding: .15rem .5rem;
+      border-radius: 999px;
+      background: #020617;
+      border: 1px solid #4b5563;
+    }
+
+    .resource-pill strong {
+      color: #e5e7eb;
+    }
+
+    .buildings-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .4rem;
+      margin-top: .5rem;
+    }
+
+    .building-tag {
+      font-size: .75rem;
+      padding: .15rem .4rem;
+      border-radius: .5rem;
+      border: 1px solid #4b5563;
+      background: #020617;
+    }
+
+    .status-bar {
+      display: flex;
+      gap: .5rem;
+      flex-wrap: wrap;
+      margin-top: .25rem;
+      font-size: .8rem;
+      color: #9ca3af;
+    }
+
+    .log {
+      max-height: 150px;
+      overflow-y: auto;
+      font-size: .8rem;
+      border-radius: .5rem;
+      background: #020617;
+      padding: .5rem;
+      border: 1px solid #1f2937;
+    }
+
+    .log-entry {
+      margin-bottom: .25rem;
+    }
+
+    .log-entry span.time {
+      color: #6b7280;
+      margin-right: .25rem;
+    }
+
+    .log-entry span.type {
+      text-transform: uppercase;
+      font-size: .65rem;
+      padding: .05rem .25rem;
+      border-radius: .4rem;
+      border: 1px solid #4b5563;
+      margin-right: .25rem;
+    }
+
+    .log-entry.error span.type {
+      border-color: #f97373;
+      color: #fecaca;
+    }
+
+    .log-entry.info span.type {
+      border-color: #38bdf8;
+      color: #bae6fd;
+    }
+
+    .log-entry.action span.type {
+      border-color: #a855f7;
+      color: #e9d5ff;
+    }
+
+    .small {
+      font-size: .75rem;
+      color: #9ca3af;
+    }
+  </style>
+</head>
+
+<body>
+<div class="page">
+
+  <div class="top-bar">
+    <h1>Civitas Online — demo</h1>
+    <div class="small" id="connection-status">Nav savienojuma ar serveri…</div>
+  </div>
+
+  <!-- 1. Pieslēgšanās / lobby -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Lobby</h2>
+      <div id="room-label" class="small"></div>
+    </div>
+
+    <div class="row" style="align-items:flex-end;">
+      <div class="input-group">
+        <label>Tavs vārds</label>
+        <input id="player-name" type="text" placeholder="Piem., Sandra" />
+      </div>
+
+      <div class="input-group">
+        <label>Istabas kods (ROOM)</label>
+        <input id="room-code" type="text" placeholder="Piem., ABCD" maxlength="6" />
+      </div>
+
+      <div class="input-group" style="flex-direction:row;gap:.5rem;">
+        <button id="btn-create">Create room</button>
+        <button id="btn-join" class="secondary">Join room</button>
+      </div>
+    </div>
+
+    <div style="margin-top:.75rem;">
+      <label>Spēlētāji istabā</label>
+      <div id="players-list" class="players-list small"></div>
+    </div>
+  </div>
+
+  <div class="layout-main">
+
+    <!-- Kreisā puse: mana roka + citi spēlētāji -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Tava roka & citi spēlētāji</h2>
+        <button id="btn-draw" class="secondary" disabled>Draw (līdz 5)</button>
+      </div>
+
+      <div>
+        <label>Tavas kārtis</label>
+        <div id="my-hand" class="hand"></div>
+        <div class="status-bar">
+          <div>Izvēlētā kārts: <span id="selected-card-label">–</span></div>
+          <div>
+            Mērķis:
+            <select id="target-player-select">
+              <option value="">(nav)</option>
+            </select>
+          </div>
+          <button id="btn-play" disabled>Play selected card</button>
+        </div>
+      </div>
+
+      <hr style="border-color:#1f2937;margin:1rem 0;" />
+
+      <div>
+        <label>Citu spēlētāju rokas (aizmugures)</label>
+        <div id="other-hands" class="others-container"></div>
+      </div>
+    </div>
+
+    <!-- Labā puse: mans galds + logi -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Tava pilsēta</h2>
+        <div id="points-label" class="badge">Punkti: 0</div>
+      </div>
+
+      <div>
+        <label>Resursi</label>
+        <div id="my-resources" class="resource-row"></div>
+      </div>
+
+      <div style="margin-top:.5rem;">
+        <label>Celtnes</label>
+        <div id="my-buildings" class="buildings-grid"></div>
+      </div>
+
+      <hr style="border-color:#1f2937;margin:1rem 0;" />
+
+      <div>
+        <label>Ziņas</label>
+        <div id="log" class="log"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ==================== Socket.IO ====================
+
+  let socket = null;
+  let currentRoomCode = null;
+  let currentPlayerId = null;
+  let myState = null;      // privātais stāvoklis
+  let publicState = null;  // publiskais stāvoklis
+
+  const el = (id) => document.getElementById(id);
+
+  function addLog(type, message) {
+    const log = el("log");
+    const row = document.createElement("div");
+    row.className = "log-entry " + type;
+    const time = new Date().toLocaleTimeString();
+    row.innerHTML = `<span class="time">${time}</span>
+                     <span class="type">${type}</span>
+                     <span>${message}</span>`;
+    log.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function setConnectionStatus(text) {
+    el("connection-status").textContent = text;
+  }
+
+  function connectSocket() {
+    try {
+      socket = io(); // noklusētais: tas pats hosts/ports
+
+      socket.on("connect", () => {
+        setConnectionStatus("Savienots ar serveri.");
+        addLog("info", "Socket savienots.");
+      });
+
+      socket.on("disconnect", () => {
+        setConnectionStatus("Savienojums zaudēts.");
+        addLog("error", "Socket atvienots.");
+      });
+
+      socket.on("your_state", (data) => {
+        currentRoomCode = data.room_code;
+        currentPlayerId = data.player_id;
+        myState = data.me;
+        addLog("info", `Saņemts tavs stāvoklis (room ${currentRoomCode}).`);
+        renderAll();
+      });
+
+      socket.on("game_update", (data) => {
+        publicState = data;
+        addLog("info", "Saņemts spēles publiskais stāvoklis.");
+        renderAll();
+      });
+
+      socket.on("error_message", (data) => {
+        addLog("error", data.error || "Error");
+        alert("Error: " + (data.error || "Unknown error"));
+      });
+
+      socket.on("action_result", (data) => {
+        if (!data.ok) {
+          addLog("error", data.error || "Kārti izspēlēt neizdevās");
+          alert(data.error || "Play failed");
+        } else {
+          addLog("action", data.info || "Kārts izspēlēta.");
+        }
+      });
+    } catch (e) {
+      console.error(e);
+      setConnectionStatus("Neizdevās pieslēgties Socket.IO.");
+    }
+  }
+
+  // ==================== UI loģika ====================
+
+  function onCreateRoom() {
+    const name = el("player-name").value.trim() || "Spēlētājs";
+    if (!socket || !socket.connected) {
+      alert("Nav savienojuma ar serveri.");
+      return;
+    }
+    socket.emit("create_room", { name });
+    addLog("action", `Prasīts izveidot istabu (vārds: ${name}).`);
+  }
+
+  function onJoinRoom() {
+    const name = el("player-name").value.trim() || "Spēlētājs";
+    const roomCode = el("room-code").value.trim().toUpperCase();
+    if (!roomCode) {
+      alert("Ievadi room code (piem., ABCD).");
+      return;
+    }
+    if (!socket || !socket.connected) {
+      alert("Nav savienojuma ar serveri.");
+      return;
+    }
+    socket.emit("join_room", { name, room_code: roomCode });
+    addLog("action", `Mēģinu pievienoties istabai ${roomCode}.`);
+  }
+
+  function onDraw() {
+    if (!currentRoomCode) {
+      alert("Vispirms izveido vai pievienojies istabai.");
+      return;
+    }
+    socket.emit("draw_cards", { room_code: currentRoomCode });
+    addLog("action", "Pieprasīts vilkt līdz 5 kārtīm.");
+  }
+
+  function getSelectedCardId() {
+    const cardDiv = document.querySelector(".card-slot.selected");
+    return cardDiv ? cardDiv.dataset.cardId : null;
+  }
+
+  function onPlaySelected() {
+    const cardId = getSelectedCardId();
+    if (!cardId) {
+      alert("Vispirms izvēlies kārti.");
+      return;
+    }
+    if (!currentRoomCode || !currentPlayerId || !myState) {
+      alert("Nav aktīvas spēles / spēlētāja.");
+      return;
+    }
+    const targetId = el("target-player-select").value || null;
+    socket.emit("play_card", {
+      room_code: currentRoomCode,
+      card_id: cardId,
+      target_player_id: targetId,
+      extra: {}
+    });
+    addLog("action", `Sūtīts play_card (id=${cardId}, target=${targetId || "nav"}).`);
+  }
+
+  // --------------------- Renderēšana ---------------------
+
+  function renderAll() {
+    renderRoomLabel();
+    renderPlayersList();
+    renderMyState();
+    renderOthersHands();
+  }
+
+  function renderRoomLabel() {
+    const label = el("room-label");
+    if (!currentRoomCode) {
+      label.textContent = "";
+    } else {
+      label.textContent = "Room: " + currentRoomCode;
+    }
+  }
+
+  function renderPlayersList() {
+    const container = el("players-list");
+    container.innerHTML = "";
+
+    if (!publicState || !publicState.players) return;
+
+    publicState.players.forEach((p) => {
+      const div = document.createElement("div");
+      div.className = "player-pill" + (p.id === currentPlayerId ? " me" : "");
+      div.innerHTML = `
+        <span class="dot"></span>
+        <span>${p.name}</span>
+        <span class="badge">hand: ${p.hand_size}</span>
+        <span class="badge">pts: ${p.points}</span>
+      `;
+      container.appendChild(div);
+    });
+
+    // Target select
+    const sel = el("target-player-select");
+    const prev = sel.value;
+    sel.innerHTML = `<option value="">(nav)</option>`;
+    publicState.players.forEach((p) => {
+      if (p.id === currentPlayerId) return;
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.name;
+      sel.appendChild(opt);
+    });
+    if ([...sel.options].some(o => o.value === prev)) {
+      sel.value = prev;
+    }
+  }
+
+  function renderMyState() {
+    const canPlay = !!(myState && myState.hand && myState.hand.length);
+    el("btn-draw").disabled = !currentRoomCode;
+    el("btn-play").disabled = !canPlay;
+
+    const handDiv = el("my-hand");
+    handDiv.innerHTML = "";
+    el("selected-card-label").textContent = "–";
+
+    if (!myState) {
+      el("my-resources").innerHTML = "";
+      el("my-buildings").innerHTML = "";
+      el("points-label").textContent = "Punkti: 0";
+      return;
+    }
+
+    // Rokas kartes
+    myState.hand.forEach((card) => {
+      const slot = document.createElement("div");
+      slot.className = "card-slot";
+      slot.dataset.cardId = card.id;
+      const imgPath = "../assets/cards/" + card.image; // relatīvs ceļš
+      slot.innerHTML = `
+        <img src="${imgPath}" alt="${card.name}" onerror="this.style.display='none';this.parentElement.querySelector('span').style.display='block';" />
+        <span style="display:none;">${card.name}</span>
+        <div class="card-type-tag">${card.type}</div>
+      `;
+      slot.addEventListener("click", () => {
+        document.querySelectorAll(".card-slot").forEach(d => d.classList.remove("selected"));
+        slot.classList.add("selected");
+        el("selected-card-label").textContent = card.name + " (" + card.type + ")";
+      });
+      handDiv.appendChild(slot);
+    });
+
+    // Resursi
+    const resDiv = el("my-resources");
+    resDiv.innerHTML = "";
+    const r = myState.resources || {};
+    const resLabels = {
+      stone: "Akmens",
+      wood: "Koks",
+      knowledge: "Zināšanas",
+      gold: "Zelts"
+    };
+    Object.keys(resLabels).forEach(key => {
+      const pill = document.createElement("div");
+      pill.className = "resource-pill";
+      pill.innerHTML = `<strong>${resLabels[key]}:</strong> ${r[key] || 0}`;
+      resDiv.appendChild(pill);
+    });
+
+    // Celtnes
+    const buildDiv = el("my-buildings");
+    buildDiv.innerHTML = "";
+    (myState.buildings || []).forEach(b => {
+      const tag = document.createElement("div");
+      tag.className = "building-tag";
+      tag.textContent = b.name;
+      buildDiv.appendChild(tag);
+    });
+
+    el("points-label").textContent = "Punkti: " + (myState.points || 0);
+  }
+
+  function renderOthersHands() {
+    const container = el("other-hands");
+    container.innerHTML = "";
+
+    if (!publicState || !publicState.players) return;
+
+    publicState.players.forEach((p) => {
+      if (p.id === currentPlayerId) return;
+
+      const row = document.createElement("div");
+      row.className = "other-player-row";
+
+      const nameSpan = document.createElement("div");
+      nameSpan.className = "other-player-name";
+      nameSpan.textContent = p.name + ` (pts: ${p.points})`;
+      row.appendChild(nameSpan);
+
+      const backs = document.createElement("div");
+      backs.className = "backs-row";
+
+      for (let i = 0; i < p.hand_size; i++) {
+        const back = document.createElement("div");
+        back.className = "card-back";
+        back.textContent = "CIV";
+        backs.appendChild(back);
+      }
+
+      row.appendChild(backs);
+      container.appendChild(row);
+    });
+  }
+
+  // ==================== Event listeneri ====================
+
+  window.addEventListener("DOMContentLoaded", () => {
+    connectSocket();
+
+    el("btn-create").addEventListener("click", onCreateRoom);
+    el("btn-join").addEventListener("click", onJoinRoom);
+    el("btn-draw").addEventListener("click", onDraw);
+    el("btn-play").addEventListener("click", onPlaySelected);
+  });
+</script>
+</body>
+</html>
 
